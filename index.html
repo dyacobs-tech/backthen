@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BackThen — On This Day</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#17150f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#faf6ee;--card:#fffdf7;--txt:#1c1a14;--mut:#8a8172;--acc:#e8590c;--acc2:#f59f00;--bd:#e9e1d2;--dark:#17150f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:4;background:rgba(250,246,238,.88);backdrop-filter:saturate(180%) blur(16px);border-bottom:1px solid var(--bd);padding:calc(10px + env(safe-area-inset-top)) 16px 10px}
+header .row{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.logo{font:800 24px/1 Georgia,"Times New Roman",serif;letter-spacing:-.01em}
+.logo span{color:var(--acc)}
+#hdrdate{color:var(--mut);font-size:13px;margin-top:2px}
+.streak{font-weight:700;font-size:13px;background:#fff3e0;border:1px solid #ffe0b2;color:#b35c00;border-radius:999px;padding:3px 10px;white-space:nowrap}
+main{max-width:640px;margin:0 auto;padding:14px 14px 8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(60,45,10,.05)}
+.card h2{font:700 19px/1.25 Georgia,serif;margin:0 0 8px}
+.mut{color:var(--mut);font-size:13px}
+.btn{display:block;width:100%;background:var(--dark);color:#fff;border:0;border-radius:12px;padding:13px;font:600 15px inherit;cursor:pointer;text-align:center}
+.btn.acc{background:var(--acc)}
+.btn.sec{background:#f1e9d8;color:var(--txt)}
+.btn.sm{width:auto;display:inline-block;padding:7px 13px;font-size:13px;border-radius:999px}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.mem{padding:0;overflow:hidden}
+.mem img.main{width:100%;display:block;max-height:70vh;object-fit:cover;background:#eee}
+.mem .body{padding:12px 14px 14px}
+.yrs{display:inline-block;background:var(--acc);color:#fff;font:700 12px/1 inherit;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:5px 10px}
+.mem .when{font:700 17px Georgia,serif;margin:8px 0 2px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:2px}
+.pair figure{margin:0;position:relative}
+.pair img{width:100%;height:220px;object-fit:cover;display:block}
+.pair figcaption{position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:3px 7px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px}
+.grid figure{margin:0;position:relative}
+.grid img{width:100%;height:110px;object-fit:cover;display:block;border-radius:4px}
+.grid figcaption{position:absolute;left:5px;bottom:5px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;font-weight:600;border-radius:5px;padding:2px 6px}
+input[type=date]{font:15px inherit;padding:9px;border:1px solid var(--bd);border-radius:10px;background:#fff;width:100%}
+nav{position:fixed;bottom:0;left:0;right:0;background:rgba(23,21,15,.92);backdrop-filter:saturate(180%) blur(20px);display:flex;padding:8px 10px calc(8px + env(safe-area-inset-bottom));z-index:5}
+nav button{flex:1;background:none;border:0;color:#b8b0a0;padding:6px 0;font:600 11px inherit;text-transform:uppercase;letter-spacing:.08em;cursor:pointer}
+nav button.on{color:var(--acc2)}
+.empty{text-align:center;padding:26px 10px}
+.empty .big{font-size:40px}
+progress{width:100%;height:8px;accent-color:var(--acc)}
+</style>
+</head>
+<body>
+<header>
+  <div class="row"><div class="logo">Back<span>Then</span></div><div class="streak" id="streak"></div></div>
+  <div id="hdrdate"></div>
+</header>
+<main id="app"></main>
+<nav id="nav"></nav>
+<input type="file" id="picker" accept="image/*" multiple hidden>
+<input type="file" id="nowpicker" accept="image/*" hidden>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const isoOf=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const todayISO=()=>isoOf(new Date());
+const mdOf=iso=>iso.slice(5);
+let tab="today", selDay=todayISO(), PHOTOS=[], nowTarget=null;
+
+/* ---------- streak ---------- */
+function bumpStreak(){
+  const t=todayISO(), y=isoOf(new Date(Date.now()-864e5));
+  let s=JSON.parse(localStorage.getItem("bt_streak")||'{"n":0,"last":""}');
+  if(s.last===t){/* same day */}
+  else if(s.last===y){s.n+=1;s.last=t}
+  else{s.n=1;s.last=t}
+  localStorage.setItem("bt_streak",JSON.stringify(s));
+  return s.n;
+}
+
+/* ---------- IndexedDB ---------- */
+let dbP=null;
+function db(){if(dbP)return dbP;dbP=new Promise((res,rej)=>{
+  const r=indexedDB.open("backthen",1);
+  r.onupgradeneeded=()=>{r.result.createObjectStore("photos",{keyPath:"id"})};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);
+});return dbP}
+async function idbAll(){const d=await db();return new Promise((res,rej)=>{
+  const q=d.transaction("photos").objectStore("photos").getAll();
+  q.onsuccess=()=>res(q.result||[]);q.onerror=()=>rej(q.error)})}
+async function idbPut(p){const d=await db();return new Promise((res,rej)=>{
+  const q=d.transaction("photos","readwrite").objectStore("photos").put(p);
+  q.onsuccess=()=>res();q.onerror=()=>rej(q.error)})}
+async function idbDel(id){const d=await db();return new Promise((res,rej)=>{
+  const q=d.transaction("photos","readwrite").objectStore("photos").delete(id);
+  q.onsuccess=()=>res();q.onerror=()=>rej(q.error)})}
+
+/* ---------- EXIF date (JPEG DateTimeOriginal) ---------- */
+async function exifDate(file){
+  try{
+    const buf=await file.slice(0,256*1024).arrayBuffer();
+    const v=new DataView(buf);
+    if(v.byteLength<4||v.getUint16(0)!==0xFFD8)return null;
+    let off=2;
+    while(off+4<v.byteLength){
+      const marker=v.getUint16(off);
+      if((marker&0xFF00)!==0xFF00)break;
+      const len=v.getUint16(off+2);
+      if(marker===0xFFE1&&v.getUint32(off+4)===0x45786966){ // "Exif"
+        const t0=off+10, le=v.getUint16(t0)===0x4949;
+        const g16=o=>v.getUint16(o,le), g32=o=>v.getUint32(o,le);
+        const ifd0=t0+g32(t0+4);
+        const readIFD=(io,want)=>{
+          const n=g16(io);
+          for(let i=0;i<n;i++){
+            const e=io+2+i*12;
+            if(g16(e)===want)return e;
+          }return 0};
+        let e=readIFD(ifd0,0x9003)||readIFD(ifd0,0x0132);
+        if(!e){
+          const ptr=readIFD(ifd0,0x8769);
+          if(ptr){
+            const sub=t0+g32(ptr+8);
+            e=readIFD(sub,0x9003)||readIFD(sub,0x9004)||readIFD(sub,0x0132);
+          }
+        }
+        if(!e)return null;
+        const so=t0+g32(e+8);
+        let s="";
+        for(let i=0;i<19;i++)s+=String.fromCharCode(v.getUint8(so+i));
+        const m=s.match(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2})/);
+        if(!m)return null;
+        return {iso:m[1]+"-"+m[2]+"-"+m[3], time:m[4]+":"+m[5]};
+      }
+      if(marker===0xFFDA)break;
+      off+=2+len;
+    }
+  }catch(e){}
+  return null;
+}
+
+/* ---------- import ---------- */
+async function importFiles(files,prog){
+  let done=0;
+  for(const f of files){
+    if(!f.type.startsWith("image/"))continue;
+    const ex=await exifDate(f);
+    const d=ex?null:new Date(f.lastModified||Date.now());
+    const p={id:uid(),iso:ex?ex.iso:isoOf(d),time:ex?ex.time:(d?String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"):""),
+      name:f.name,blob:f,hidden:false,nowBlob:null,nowISO:""};
+    await idbPut(p);done++;
+    if(prog)prog(done,files.length);
+  }
+  PHOTOS=await idbAll();
+}
+
+/* ---------- helpers ---------- */
+const urlCache=new Map();
+function U(blob){if(!blob)return"";let u=urlCache.get(blob);if(!u){u=URL.createObjectURL(blob);urlCache.set(blob,u)}return u}
+function yearsAgo(p){
+  const a=+selDay.slice(0,4), b=+p.iso.slice(0,4), n=a-b;
+  return n<=0?"This year":n===1?"1 year ago":n+" years ago";
+}
+function fmtLong(iso){return new Date(iso+"T12:00:00").toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric",year:"numeric"})}
+function esc(s){return String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+/* ---------- views ---------- */
+const TABS=[["today","◐ Today"],["library","▦ Library"],["add","+ Add photos"]];
+function renderNav(){$("#nav").innerHTML=TABS.map(t=>`<button class="${tab===t[0]?'on':''}" onclick="go('${t[0]}')">${t[1]}</button>`).join("")}
+function go(t){if(t==="add"){$("#picker").click();return}tab=t;render()}
+function render(){
+  renderNav();
+  $("#hdrdate").textContent=fmtLong(selDay)+(selDay===todayISO()?" · On this day":"");
+  $("#streak").textContent="🔥 "+bumpStreak()+" day"+(bumpStreak()===1?"":"s");
+  ({today:vToday,library:vLibrary})[tab]();
+}
+function memCard(p){
+  const pair=p.nowBlob?`<div class="pair">
+    <figure><img src="${U(p.blob)}" alt=""><figcaption>Then · ${p.iso.slice(0,4)}</figcaption></figure>
+    <figure><img src="${U(p.nowBlob)}" alt=""><figcaption>Now · ${p.nowISO.slice(0,4)}</figcaption></figure></div>`
+    :`<img class="main" src="${U(p.blob)}" alt="">`;
+  return `<div class="card mem">${pair}<div class="body">
+    <span class="yrs">${yearsAgo(p)}</span>
+    <div class="when">${fmtLong(p.iso)}</div>
+    <div class="mut">${esc(p.name)}${p.time?" · "+p.time:""}</div>
+    <div class="btnrow">
+      <button class="btn sec sm" onclick="hideP('${p.id}')">Hide</button>
+      <button class="btn sec sm" onclick="nowFor('${p.id}')">Then &amp; Now</button>
+      <button class="btn sec sm" onclick="shareP('${p.id}')">Share</button>
+    </div></div></div>`;
+}
+function vToday(){
+  const list=PHOTOS.filter(p=>!p.hidden&&mdOf(p.iso)===mdOf(selDay)).sort((a,b)=>b.iso.localeCompare(a.iso));
+  const total=PHOTOS.length;
+  let h=`<div class="card"><h2>${selDay===todayISO()?"Today, in years past":"On "+fmtLong(selDay)}</h2>
+    <div class="mut">${total?total+" photo"+(total===1?"":"s")+" in your library · "+list.length+" from this day":"No photos yet — add some below and BackThen does the rest."}</div>
+    <div style="margin-top:10px"><input type="date" value="${selDay}" onchange="selDay=this.value;render()"></div>
+    ${selDay!==todayISO()?`<div class="btnrow"><button class="btn sec sm" onclick="selDay=todayISO();render()">Back to today</button></div>`:""}
+    </div>`;
+  if(!list.length){
+    h+=`<div class="card empty"><div class="big">🕰️</div><h2>Nothing from this day… yet</h2>
+    <div class="mut">Either no imported photo was taken on ${fmtLong(selDay).replace(/, \d{4}$/,"")}, or the library is still small. Import more years of photos and this day fills up fast.</div>
+    <div class="btnrow" style="justify-content:center"><button class="btn acc sm" onclick="document.querySelector('#picker').click()">+ Add photos</button></div></div>`;
+  }else{
+    h+=list.map(memCard).join("");
+  }
+  $("#app").innerHTML=h;
+}
+function vLibrary(){
+  const sorted=[...PHOTOS].sort((a,b)=>b.iso.localeCompare(a.iso));
+  if(!sorted.length){
+    $("#app").innerHTML=`<div class="card empty"><div class="big">📷</div><h2>Your library is empty</h2>
+    <div class="mut">Photos live only on this phone, in this app — nothing is uploaded anywhere.</div>
+    <div class="btnrow" style="justify-content:center"><button class="btn acc sm" onclick="document.querySelector('#picker').click()">+ Add photos</button></div></div>`;
+    return;
+  }
+  const yrs=[...new Set(sorted.map(p=>p.iso.slice(0,4)))];
+  $("#app").innerHTML=`<div class="card"><h2>Library</h2><div class="mut">${sorted.length} photos · ${yrs.length} year${yrs.length===1?"":"s"} (${yrs[yrs.length-1]}–${yrs[0]}) · tap a photo to jump to its day</div></div>
+  <div class="grid">${sorted.map(p=>`<figure onclick="selDay='${p.iso}';tab='today';render()"><img src="${U(p.blob)}" alt="" loading="lazy"><figcaption>${p.iso}${p.hidden?" · hidden":""}</figcaption></figure>`).join("")}</div>
+  ${sorted.some(p=>p.hidden)?`<div class="card"><h2>Hidden</h2>${sorted.filter(p=>p.hidden).map(p=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)"><span>${p.iso} · ${esc(p.name)}</span><button class="btn sec sm" onclick="unhideP('${p.id}')">Unhide</button></div>`).join("")}</div>`:""}`;
+}
+
+/* ---------- actions ---------- */
+async function hideP(id){const p=PHOTOS.find(x=>x.id===id);if(!p)return;p.hidden=true;await idbPut(p);render()}
+async function unhideP(id){const p=PHOTOS.find(x=>x.id===id);if(!p)return;p.hidden=false;await idbPut(p);render()}
+function nowFor(id){nowTarget=id;$("#nowpicker").click()}
+async function shareP(id){
+  const p=PHOTOS.find(x=>x.id===id);if(!p)return;
+  const f=new File([p.blob],p.name||"backthen.jpg",{type:p.blob.type||"image/jpeg"});
+  if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:yearsAgo(p)+" — "+p.iso})}catch(e){}}
+  else{const a=document.createElement("a");a.href=U(p.blob);a.download=f.name;a.click()}
+}
+window.go=go;window.hideP=hideP;window.unhideP=unhideP;window.nowFor=nowFor;window.shareP=shareP;
+
+$("#picker").addEventListener("change",async e=>{
+  const files=[...e.target.files];e.target.value="";
+  if(!files.length)return;
+  $("#app").innerHTML=`<div class="card"><h2>Adding photos…</h2><progress id="pr" max="${files.length}" value="0"></progress><div class="mut" id="prt"></div></div>`;
+  await importFiles(files,(d,n)=>{const pr=$("#pr");if(pr){pr.value=d;$("#prt").textContent=d+" of "+n}});
+  tab="today";render();
+});
+$("#nowpicker").addEventListener("change",async e=>{
+  const f=e.target.files[0];e.target.value="";
+  if(!f||!nowTarget)return;
+  const p=PHOTOS.find(x=>x.id===nowTarget);nowTarget=null;
+  if(!p)return;
+  p.nowBlob=f;p.nowISO=todayISO();await idbPut(p);render();
+});
+
+(async()=>{PHOTOS=await idbAll();render()})();
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).then(r=>{r.update().catch(()=>{})}).catch(()=>{})}
+</script>
+</body>
+</html>
